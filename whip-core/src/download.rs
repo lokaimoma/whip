@@ -1,7 +1,7 @@
 use reqwest::header;
 
 /// A representation of a download task.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DownloadTask {
     pub file_url: String,
     pub percentage_completed: u8,
@@ -9,9 +9,9 @@ pub struct DownloadTask {
 }
 
 /// Basic information on the file to download.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DownloadMeta {
-    pub content_length: u32,
+    pub content_length: u64,
     pub supports_resume: bool,
     pub content_type: String,
     pub file_name: String,
@@ -20,8 +20,9 @@ pub struct DownloadMeta {
 /// Representation of a part of the file to download.
 #[derive(Debug)]
 pub struct DownloadPart {
-    pub start_byte: u32,
-    pub end_byte: u32,
+    pub id: u8,
+    pub start_byte: u64,
+    pub end_byte: u64,
     pub file_url: String,
 }
 
@@ -54,7 +55,7 @@ impl DownloadTask {
             if let Some(content_length) = response.headers().get(header::CONTENT_LENGTH) {
                 if !content_length.is_empty() {
                     meta.content_length = String::from(content_length.to_str().unwrap())
-                        .parse::<u32>()
+                        .parse::<u64>()
                         .unwrap_or(meta.content_length);
                 }
             }
@@ -92,7 +93,7 @@ impl DownloadTask {
                 meta.file_name = Self::get_file_name_from_url(url).unwrap();
             }
 
-            meta.file_name = meta.file_name.replace("\"", "");
+            meta.file_name = meta.file_name.replace('\"', "");
 
             return Ok(meta);
         }
@@ -115,11 +116,12 @@ impl DownloadTask {
     }
 
     /// Returns the download parts to download
-    pub fn get_download_parts(&self, mut thread_count: u32) -> Vec<DownloadPart> {
+    pub fn get_download_parts(&self, mut thread_count: u64) -> Vec<DownloadPart> {
         let mut download_parts = Vec::new();
 
         if self.meta.content_length == 0 || !self.meta.supports_resume {
             download_parts.push(DownloadPart {
+                id: 0,
                 start_byte: 0,
                 end_byte: self.meta.content_length,
                 file_url: self.file_url.clone(),
@@ -136,6 +138,7 @@ impl DownloadTask {
         for i in 0..thread_count {
             let start = i * part_size;
             download_parts.push(DownloadPart {
+                id: i as u8,
                 start_byte: start,
                 end_byte: if i + 1 != thread_count {
                     start + part_size - 1

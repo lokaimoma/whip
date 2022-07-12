@@ -8,7 +8,7 @@ use tokio::{
     task,
 };
 
-use crate::structs::{
+use crate::{
     download::{DownloadPart, DownloadTask},
     info::{CompletedDownload, DownloadPartProgressInfo, Progress},
 };
@@ -117,6 +117,7 @@ async fn download_part(
         if let Ok(data) = content {
             if let Ok(_) = temp_file.write_all(&data).await {
                 amount_downloaded += data.len();
+                
 
                 if let Err(_) = tx.send(DownloadPartProgressInfo::InProgress(Progress {
                     amount_downloaded: amount_downloaded as u64,

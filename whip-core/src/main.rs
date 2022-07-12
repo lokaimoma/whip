@@ -1,13 +1,24 @@
-use whip_core::downloader::core::download;
-use whip_core::structs::download::DownloadTask;
+// use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
+//use whip_core::core::download;
+use whip_core::{download::DownloadTask, downloader::Downloader};
 
 #[tokio::main]
 async fn main() {
     let dt = DownloadTask::new(String::from(
-        "http://95.216.22.233/pcwonderland.com/download.php?url_str=https%3A%2F%2F95.216.22.233%2FiGetintopc.com%2Fdownload.php%3Ffilename%3DPcWonderland.com_7_Zip_21_x64.rar%26expires%3D1658053555%26signature%3D1b5be7a15a5742f5d65bed327651d10b&filename=PcWonderland.com_7_Zip_21_x64.rar",
+        "https://github.com/lokaimoma/Bugza/archive/refs/heads/main.zip",
     ))
     .await
     .unwrap();
 
-    download(dt, 8).await;
+    let downloader = Downloader::new(
+        dt,
+        "./downloads".to_string(),
+        "./temp".to_string(),
+        |percentage_completed| println!("Progress : {}/100", percentage_completed.round()),
+        |file_path| println!("Download completed : {}", file_path),
+        |e| println!("{:?}", e),
+        true,
+    )
+    .unwrap();
+    let _res = downloader.download(4).await.unwrap();
 }

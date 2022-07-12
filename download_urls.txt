@@ -1,0 +1,7 @@
+// android studio => https://redirector.gvt1.com/edgedl/android/studio/ide-zips/2021.2.1.15/android-studio-2021.2.1.15-linux.tar.gz
+
+    // http://95.216.22.233/pcwonderland.com/download.php?url_str=https%3A%2F%2F95.216.22.233%2FiGetintopc.com%2Fdownload.php%3Ffilename%3DPcWonderland.com_Notepad%2520%2520_8_x64.rar%26expires%3D1658183183%26signature%3D4c154eff7ee739690d8be15bb80e7269&filename=PcWonderland.com_Notepad%2B%2B_8_x64.rar
+
+    // https://github.com/LMMS/lmms/releases/download/v1.2.2/lmms-1.2.2-linux-x86_64.AppImagehttps://ocs-dl.fra1.digitaloceanspaces.com/data/files/1566371771/Giada-0.15.4-x86_64.AppImage?response-content-disposition=attachment%3B%2520Giada-0.15.4-x86_64.AppImage&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=RWJAQUNCHT7V2NCLZ2AL%2F20220711%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20220711T225944Z&X-Amz-SignedHeaders=host&X-Amz-Expires=60&X-Amz-Signature=6c03ed775e5ffcc97d3c3e0fc87c6a1ad794ad803e1cf402bffd4372e18bbe4b
+
+    // http://95.216.22.233/pcwonderland.com/download.php?url_str=https%3A%2F%2F95.216.22.233%2FiGetintopc.com%2Fdownload.php%3Ffilename%3DPcWonderland.com_XYplorer_23_Portable.rar%26expires%3D1658185537%26signature%3D5360badb5245972e22468db5ed3dfe40&filename=PcWonderland.com_XYplorer_23_Portable.rar
