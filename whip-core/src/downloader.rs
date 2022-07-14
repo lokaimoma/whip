@@ -66,13 +66,13 @@ impl Downloader {
     ) -> Result<Self, WhipError> {
         let output_path = PathBuf::from(output_dir);
         if !output_path.is_dir() {
-            return Err(WhipError::FileSystem(
+            return Err(WhipError::Storage(
                 "Output directory doesn't exist or path leads to a file".to_string(),
             ));
         }
         let temp_path = PathBuf::from(temp_dir);
         if !use_in_memory_storage && !temp_path.is_dir() {
-            return Err(WhipError::FileSystem(
+            return Err(WhipError::Storage(
                 "Temporary directory doesn't exist".to_string(),
             ));
         }
@@ -186,13 +186,13 @@ impl Downloader {
                 match storage {
                     Storage::InMemory(ref mut s) => {
                         if let Err(e) = s.cursor.write_all(&bytes).await {
-                            return Err(WhipError::Unknown(e.to_string()));
+                            return Err(WhipError::Storage(e.to_string()));
                         }
                     }
 
                     Storage::File(ref mut f) => {
                         if let Err(e) = f.file.write_all(&bytes).await {
-                            return Err(WhipError::FileSystem(e.to_string()));
+                            return Err(WhipError::Storage(e.to_string()));
                         }
                     }
                 };
@@ -251,7 +251,7 @@ impl Downloader {
         {
             Ok(file) => file,
             Err(_) => {
-                return Some(Err(WhipError::FileSystem(
+                return Some(Err(WhipError::Storage(
                     "Unable to create temporary file".to_string(),
                 )));
             }
@@ -310,14 +310,14 @@ impl Downloader {
                 }
                 if !buffer.is_empty() {
                     if let Err(e) = file.write_all(&buffer).await {
-                        return Err(WhipError::FileSystem(e.to_string()));
+                        return Err(WhipError::Storage(e.to_string()));
                     }
                 }
             }
             self.completed = true;
             return Ok(f_path);
         }
-        Err(WhipError::FileSystem(
+        Err(WhipError::Storage(
             "Error creating download file".to_string(),
         ))
     }

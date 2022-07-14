@@ -1,6 +1,6 @@
 #[derive(Debug)]
 pub enum WhipError {
-    FileSystem(String),
+    Storage(String),
     NetWork(String),
     Unknown(String),
 }
