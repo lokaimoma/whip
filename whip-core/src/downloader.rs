@@ -20,7 +20,6 @@ use crate::{
 #[derive(Debug)]
 enum SessionState {
     Pause,
-    Stop,
     Download,
 }
 
@@ -32,9 +31,9 @@ pub struct Downloader {
     progress: u64,
     /// Current state of the session
     state: SessionState,
-    /// Directory to store the file
+    /// Directory to store the file. The path has to exist.
     pub output_dir: PathBuf,
-    /// Temporary directory to store download parts (when use_in_memory_sotrage = true)
+    /// Temporary directory to store download parts (when use_in_memory_sotrage = true). The path has to exist.
     pub temp_dir: PathBuf,
     /// Information on the file to download
     pub task: DownloadTask,
@@ -98,10 +97,6 @@ impl Downloader {
 
     pub fn resume(&mut self) {
         self.state = SessionState::Download;
-    }
-
-    pub fn stop(&mut self) {
-        self.state = SessionState::Stop;
     }
 
     pub async fn download(mut self, thread_count: u64) -> Result<Self, WhipError> {
