@@ -195,6 +195,9 @@ impl Downloader {
                     s.on_event(Event::ProgressChanged(bytes_length as u64))
                         .await
                         .unwrap();
+                    if let SessionState::Pause = s.state {
+                        return Ok(());
+                    }
                 }
             }
         }
