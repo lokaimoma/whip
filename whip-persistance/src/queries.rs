@@ -41,11 +41,7 @@ impl DownloadTaskRepository for SqlitePool {
                 file_name: r.file_name,
                 file_size: r.file_size.unwrap_or(0) as u64,
                 file_url: r.file_url,
-                supports_resume: if r.supports_resume.unwrap_or(0) > 1 {
-                    true
-                } else {
-                    false
-                },
+                supports_resume: r.supports_resume.unwrap_or(0) > 1,
                 temp_files_path: r.temp_files_path,
                 final_file_path: r.final_file_path,
                 thread_count: r.thread_count as u64,
@@ -70,11 +66,7 @@ impl DownloadTaskRepository for SqlitePool {
                     file_name: r.file_name,
                     file_size: r.file_size.unwrap_or(0) as u64,
                     file_url: r.file_url,
-                    supports_resume: if r.supports_resume.unwrap_or(0) > 1 {
-                        true
-                    } else {
-                        false
-                    },
+                    supports_resume: r.supports_resume.unwrap_or(0) > 1,
                     temp_files_path: r.temp_files_path,
                     final_file_path: r.final_file_path,
                     thread_count: r.thread_count as u64,
@@ -98,7 +90,7 @@ impl DownloadTaskRepository for SqlitePool {
         let id = task.id as i64;
         let file_size = task.file_size as i64;
 
-        if let Ok(_) = sqlx::query!("UPDATE Download_Task SET file_name=?1, file_url=?2, file_size=?3, percentage_completed=?4, final_file_path=?5 WHERE id = ?6", task.file_name, task.file_url, file_size, task.percentage_completed, task.final_file_path, id).execute(self).await {
+        if sqlx::query!("UPDATE Download_Task SET file_name=?1, file_url=?2, file_size=?3, percentage_completed=?4, final_file_path=?5 WHERE id = ?6", task.file_name, task.file_url, file_size, task.percentage_completed, task.final_file_path, id).execute(self).await.is_ok() {
             return Ok(task);
         };
         Err(DatabaseError::Operation(
