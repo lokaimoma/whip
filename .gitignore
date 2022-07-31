@@ -13,3 +13,4 @@ debug/
 *.tar.*
 *fuse_*
 *.db
+*.db-*
