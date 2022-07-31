@@ -12,3 +12,4 @@ debug/
 /downloads
 *.tar.*
 *fuse_*
+*.db
