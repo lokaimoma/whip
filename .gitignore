@@ -11,3 +11,4 @@ debug/
 /temp
 /downloads
 *.tar.*
+*fuse_*
