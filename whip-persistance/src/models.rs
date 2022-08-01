@@ -17,7 +17,13 @@ pub struct DownloadTaskEntity {
     /// the number of download parts but necessary to resume download with the same number of download parts.
     pub thread_count: u64,
     pub percentage_completed: f64,
-    pub date_created: chrono::NaiveDate,
+    pub date_created: String,
+}
+
+pub enum DownloadFilter {
+    Completed,
+    InProgress,
+    All,
 }
 
 #[async_trait]
@@ -29,7 +35,10 @@ pub trait DownloadTaskRepository {
         final_file_path: String,
         thread_count: String,
     ) -> Result<u64, DatabaseError>;
-    async fn get_tasks(&self) -> Result<Vec<DownloadTaskEntity>, DatabaseError>;
+    async fn get_tasks(
+        &self,
+        filter: DownloadFilter,
+    ) -> Result<Vec<DownloadTaskEntity>, DatabaseError>;
     async fn get_task(&self, id: i64) -> Result<Option<DownloadTaskEntity>, DatabaseError>;
     async fn update_task(
         &self,

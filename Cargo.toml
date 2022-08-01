@@ -1,5 +1,6 @@
 [workspace]
 members = [
     "whip-core",
-    "whip-persistance"
+    "whip-persistance",
+    "whip-cli"
 ]

@@ -1,11 +1,9 @@
-use std::str::FromStr;
-
 use async_trait::async_trait;
 use chrono::prelude::*;
-use chrono::NaiveDate;
 use sqlx::SqlitePool;
 use whip_core::download::DownloadTask;
 
+use crate::models::DownloadFilter;
 use crate::{
     errors::DatabaseError,
     models::{DownloadTaskEntity, DownloadTaskRepository},
@@ -21,7 +19,7 @@ impl DownloadTaskRepository for SqlitePool {
         thread_count: String,
     ) -> Result<u64, DatabaseError> {
         let content_length = task.meta.content_length as i64;
-        let today = Utc::today().to_string();
+        let today = Utc::today().to_string().to_lowercase().replace("utc", "");
 
         if let Ok(res) = sqlx::query!(r#"Insert Into Download_Task (file_name, file_size, file_url, supports_resume, temp_files_path, final_file_path, thread_count, percentage_completed, date_created) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)"#, task.meta.file_name, content_length, task.file_url, task.meta.supports_resume, temp_files_path, final_file_path, thread_count, task.percentage_completed, today)
             .execute(self)
@@ -34,22 +32,36 @@ impl DownloadTaskRepository for SqlitePool {
         ))
     }
 
-    async fn get_tasks(&self) -> Result<Vec<DownloadTaskEntity>, DatabaseError> {
-        if let Ok(download_task_entities) = sqlx::query!(r#"SELECT * FROM Download_Task"#)
-            .map(|r| DownloadTaskEntity {
-                id: r.id as u64,
-                file_name: r.file_name,
-                file_size: r.file_size.unwrap_or(0) as u64,
-                file_url: r.file_url,
-                supports_resume: r.supports_resume.unwrap_or(0) > 1,
-                temp_files_path: r.temp_files_path,
-                final_file_path: r.final_file_path,
-                thread_count: r.thread_count as u64,
-                percentage_completed: r.percentage_completed.unwrap_or(0f64),
-                date_created: NaiveDate::from_str(&r.date_created).unwrap(),
-            })
-            .fetch_all(self)
-            .await
+    async fn get_tasks(
+        &self,
+        filter: DownloadFilter,
+    ) -> Result<Vec<DownloadTaskEntity>, DatabaseError> {
+        let mut upper_limit = 100f64;
+        let mut lower_limit = 0;
+
+        match filter {
+            DownloadFilter::Completed => lower_limit = 100,
+            DownloadFilter::InProgress => upper_limit = 99.999,
+            _ => {}
+        }
+
+        if let Ok(download_task_entities) = sqlx::query!(
+            r#"SELECT * FROM Download_Task WHERE percentage_completed >= ?1 and percentage_completed <= ?2"#, lower_limit, upper_limit
+        )
+        .map(|r| DownloadTaskEntity {
+            id: r.id as u64,
+            file_name: r.file_name,
+            file_size: r.file_size.unwrap_or(0) as u64,
+            file_url: r.file_url,
+            supports_resume: r.supports_resume.unwrap_or(0) > 1,
+            temp_files_path: r.temp_files_path,
+            final_file_path: r.final_file_path,
+            thread_count: r.thread_count as u64,
+            percentage_completed: r.percentage_completed.unwrap_or(0f64),
+            date_created: r.date_created,
+        })
+        .fetch_all(self)
+        .await
         {
             return Ok(download_task_entities);
         };
@@ -71,7 +83,7 @@ impl DownloadTaskRepository for SqlitePool {
                     final_file_path: r.final_file_path,
                     thread_count: r.thread_count as u64,
                     percentage_completed: r.percentage_completed.unwrap_or(0f64),
-                    date_created: NaiveDate::from_str(&r.date_created).unwrap(),
+                    date_created: r.date_created,
                 })
                 .fetch_optional(self)
                 .await
