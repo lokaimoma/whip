@@ -1,7 +1,7 @@
 use std::path::{PathBuf, MAIN_SEPARATOR};
 
 use clap::Subcommand;
-use indicatif::ProgressBar;
+use indicatif::{ProgressBar, ProgressStyle};
 use sqlx::SqlitePool;
 use whip_core::{download::DownloadTask, downloader::Downloader, errors::WhipError};
 use whip_persistance::models::{DownloadFilter as Df, DownloadTaskRepository};
@@ -57,6 +57,13 @@ pub async fn handle_download(
     };
 
     let pbr = ProgressBar::new(100);
+    pbr.set_style(
+        ProgressStyle::with_template(
+            "[{elapsed_precise:.green}] |{bar:40.blue/cyan}| {pos:0}% ● {binary_bytes_per_sec:.green} eta {eta:.blue}",
+        )
+        .unwrap()
+        .progress_chars("■▪▫"),
+    );
 
     let downloader;
 
