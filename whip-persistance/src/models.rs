@@ -1,8 +1,9 @@
 use async_trait::async_trait;
-use whip_core::download::DownloadTask;
+use whip_core::download::{DownloadMeta, DownloadTask};
 
 use crate::errors::DatabaseError;
 
+#[derive(Debug)]
 pub struct DownloadTaskEntity {
     pub id: u64,
     pub file_name: String,
@@ -13,11 +14,26 @@ pub struct DownloadTaskEntity {
     pub temp_files_path: String,
     /// Destination for final file
     pub final_file_path: String,
-    /// The number of threads passed when generating the download parts. Might not be equal to
-    /// the number of download parts but necessary to resume download with the same number of download parts.
-    pub thread_count: u64,
+    /// Maximum number of threads to use if possible
+    pub max_threads: u64,
     pub percentage_completed: f64,
     pub date_created: String,
+    pub content_type: String,
+}
+
+impl DownloadTaskEntity {
+    pub fn to_download_task(&self) -> DownloadTask {
+        DownloadTask {
+            file_url: self.file_url.to_owned(),
+            percentage_completed: self.percentage_completed,
+            meta: DownloadMeta {
+                content_length: self.file_size,
+                supports_resume: self.supports_resume,
+                content_type: self.content_type.to_owned(),
+                file_name: self.file_name.to_owned(),
+            },
+        }
+    }
 }
 
 pub enum DownloadFilter {
@@ -39,7 +55,11 @@ pub trait DownloadTaskRepository {
         &self,
         filter: DownloadFilter,
     ) -> Result<Vec<DownloadTaskEntity>, DatabaseError>;
-    async fn get_task(&self, id: i64) -> Result<Option<DownloadTaskEntity>, DatabaseError>;
+    async fn get_task_by_id(&self, id: i64) -> Result<Option<DownloadTaskEntity>, DatabaseError>;
+    async fn get_task_by_url(
+        &self,
+        url: &String,
+    ) -> Result<Option<DownloadTaskEntity>, DatabaseError>;
     async fn update_task(
         &self,
         task: DownloadTaskEntity,

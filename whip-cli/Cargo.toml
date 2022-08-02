@@ -13,3 +13,4 @@ sqlx = { version = "0.6.0"}
 whip-core = {path="../whip-core"}
 whip-persistance = {path="../whip-persistance"}
 dotenv = "0.15.0"
+pbr = "1.0.4"

@@ -18,7 +18,7 @@ use crate::{
 };
 
 #[derive(Debug)]
-enum SessionState {
+pub enum SessionState {
     Pause,
     Download,
 }
@@ -26,9 +26,12 @@ enum SessionState {
 /// Represents a download session
 /// Download only starts when start function is called.
 #[derive(Debug)]
-pub struct Downloader {
+pub struct Downloader<F>
+where
+    F: std::marker::Send + std::marker::Sync + FnMut(f64) -> () + 'static,
+{
     /// Current download progress
-    progress: u64,
+    progress: f64,
     /// Current state of the session
     state: SessionState,
     /// Directory to store the file. The path has to exist.
@@ -38,27 +41,30 @@ pub struct Downloader {
     /// Information on the file to download
     pub task: DownloadTask,
     /// Callback for getting download progress updates
-    pub on_progress_change: fn(f64) -> (),
+    pub on_progress_change: F,
     /// Callback for getting final file path on completion
-    on_complete: fn(String) -> (),
-    on_error: fn(WhipError) -> (),
+    pub on_complete: fn(String) -> (),
+    pub on_error: fn(WhipError) -> (),
     /// Status of the current download session
     pub completed: bool,
     /// Use in memory storage to store each part (Takes precedence over temp_dir)
     pub use_in_memory_storage: bool,
     /// Parts that have completed successfully
     completed_downloads: HashMap<u8, CompleteStats>,
-    /// Number of download parts
-    parts_count: u8,
+    /// Max number of threads to use
+    max_threads: u8,
 }
 
-impl Downloader {
+impl<F> Downloader<F>
+where
+    F: std::marker::Send + std::marker::Sync + FnMut(f64) -> () + 'static,
+{
     /// Creates a download
     pub fn new(
         task: DownloadTask,
         output_dir: String,
         temp_dir: String,
-        on_progress_change: fn(f64) -> (),
+        on_progress_change: F,
         on_complete: fn(String) -> (),
         on_error: fn(WhipError) -> (),
         use_in_memory_storage: bool,
@@ -76,7 +82,7 @@ impl Downloader {
             ));
         }
         Ok(Downloader {
-            progress: 0,
+            progress: 0f64,
             completed: false,
             output_dir: output_path,
             temp_dir: temp_path,
@@ -85,10 +91,39 @@ impl Downloader {
             use_in_memory_storage,
             state: SessionState::Download,
             completed_downloads: HashMap::new(),
-            parts_count: 0,
+            max_threads: 0,
             on_complete,
             on_error,
         })
+    }
+
+    /// Restore the state of a download session.
+
+    pub fn restore(
+        progress: f64,
+        task: DownloadTask,
+        output_dir: String,
+        temp_dir: String,
+        on_progress_change: F,
+        on_complete: fn(String) -> (),
+        on_error: fn(WhipError) -> (),
+        use_in_memory_storage: bool,
+        max_threads: u8,
+    ) -> Downloader<F> {
+        Downloader {
+            progress,
+            state: SessionState::Download,
+            output_dir: PathBuf::from(output_dir),
+            temp_dir: PathBuf::from(temp_dir),
+            task,
+            on_progress_change,
+            on_complete,
+            on_error,
+            completed: progress >= 100f64,
+            use_in_memory_storage,
+            completed_downloads: HashMap::new(),
+            max_threads,
+        }
     }
 
     pub fn pause(&mut self) {
@@ -99,10 +134,10 @@ impl Downloader {
         self.state = SessionState::Download;
     }
 
-    pub async fn download(mut self, thread_count: u64) -> Result<Self, WhipError> {
+    pub async fn download(mut self, thread_count: u64) -> Result<(), WhipError> {
         let client = Arc::from(reqwest::Client::new());
         let parts = self.task.get_download_parts(thread_count);
-        self.parts_count = parts.len() as u8;
+        self.max_threads = parts.len() as u8;
         let session = Arc::from(Mutex::from(self));
         let mut join_handles = Vec::new();
         for mut p in parts.into_iter() {
@@ -123,12 +158,12 @@ impl Downloader {
                 return Err(WhipError::Unknown(e.to_string()));
             }
         }
-        let ses = Arc::try_unwrap(session).unwrap();
-        Ok(ses.into_inner())
+
+        Ok(())
     }
 
     async fn download_part(
-        session: &Arc<Mutex<Downloader>>,
+        session: &Arc<Mutex<Downloader<F>>>,
         client: Arc<Client>,
         download_part: &mut DownloadPart,
     ) -> Result<(), WhipError> {
@@ -142,6 +177,10 @@ impl Downloader {
             if let Some(value) = sess.setup_file_storage(&mut storage, download_part).await {
                 if download_part.start_byte >= download_part.end_byte && download_part.end_byte != 0
                 {
+                    sess.on_event(Event::ProgressChanged(
+                        (download_part.end_byte - download_part.start_byte) as f64,
+                    ))
+                    .await?;
                     sess.on_event(Event::Complete(CompleteStats {
                         storage,
                         part_id: download_part.id,
@@ -192,7 +231,7 @@ impl Downloader {
                     }
                 };
                 if let Ok(mut s) = session.try_lock() {
-                    s.on_event(Event::ProgressChanged(bytes_length as u64))
+                    s.on_event(Event::ProgressChanged(bytes_length as f64))
                         .await
                         .unwrap();
                     if let SessionState::Pause = s.state {
@@ -244,14 +283,16 @@ impl Downloader {
             .write(!append)
             .append(append)
             .create(true)
-            .open(temp_file_path)
+            .open(&temp_file_path)
             .await
         {
             Ok(file) => file,
-            Err(_) => {
-                return Some(Err(WhipError::Storage(
-                    "Unable to create temporary file".to_string(),
-                )));
+            Err(e) => {
+                return Some(Err(WhipError::Storage(format!(
+                    "{} : {}",
+                    e.to_string(),
+                    temp_file_path.to_string_lossy().to_string()
+                ))));
             }
         };
 
@@ -264,12 +305,12 @@ impl Downloader {
             Event::ProgressChanged(progress) => {
                 self.progress += progress;
                 (self.on_progress_change)(
-                    ((self.progress as f64) / (self.task.meta.content_length as f64)) * 100f64,
+                    (self.progress / self.task.meta.content_length as f64) * 100f64,
                 );
             }
             Event::Complete(stats) => {
                 self.completed_downloads.insert(stats.part_id, stats);
-                if self.completed_downloads.len() >= self.parts_count.into() {
+                if self.completed_downloads.len() >= self.max_threads.into() {
                     let f_name = self.concatenate_files().await?;
                     (self.on_progress_change)(100f64);
                     (self.on_complete)(f_name.to_string_lossy().to_string());

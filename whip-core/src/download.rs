@@ -4,7 +4,7 @@ use reqwest::header;
 #[derive(Debug, Clone)]
 pub struct DownloadTask {
     pub file_url: String,
-    pub percentage_completed: u8,
+    pub percentage_completed: f64,
     pub meta: DownloadMeta,
 }
 
@@ -31,7 +31,7 @@ impl DownloadTask {
         if let Ok(download_meta) = Self::get_file_info(&url).await {
             return Ok(DownloadTask {
                 file_url: url,
-                percentage_completed: 0,
+                percentage_completed: 0f64,
                 meta: download_meta,
             });
         }
@@ -94,6 +94,7 @@ impl DownloadTask {
             }
 
             meta.file_name = meta.file_name.replace('\"', "");
+            meta.file_name = meta.file_name.replace("/", "");
 
             return Ok(meta);
         }
@@ -193,7 +194,7 @@ mod tests {
             file_url: String::from(
                 "https://github.com/lokaimoma/Bugza/archive/refs/heads/main.zip",
             ),
-            percentage_completed: 0,
+            percentage_completed: 0f64,
             meta: DownloadMeta {
                 content_length: 0,
                 supports_resume: false,
@@ -211,7 +212,7 @@ mod tests {
     fn test_get_download_parts_2() {
         let task = DownloadTask {
             file_url: String::from("https://go.dev/dl/go1.18.3.linux-amd64.tar.gz"),
-            percentage_completed: 0,
+            percentage_completed: 0f64,
             meta: DownloadMeta {
                 content_length: 141748419,
                 supports_resume: true,
@@ -230,7 +231,7 @@ mod tests {
     fn test_get_download_parts_3() {
         let task = DownloadTask {
             file_url: String::from("https://hello.com/smallFile.zip"),
-            percentage_completed: 0,
+            percentage_completed: 0f64,
             meta: DownloadMeta {
                 content_length: 141,
                 supports_resume: true,

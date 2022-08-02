@@ -1,8 +1,9 @@
 use std::path::{PathBuf, MAIN_SEPARATOR};
 
 use clap::Subcommand;
+use pbr::ProgressBar;
 use sqlx::SqlitePool;
-use whip_core::{download::DownloadTask, downloader::Downloader};
+use whip_core::{download::DownloadTask, downloader::Downloader, errors::WhipError};
 use whip_persistance::models::{DownloadFilter as Df, DownloadTaskRepository};
 
 #[derive(clap::ValueEnum, Clone)]
@@ -50,83 +51,88 @@ pub async fn handle_download(
     in_memory: bool,
     pool: SqlitePool,
 ) -> Result<(), ()> {
-    println!("Profiling file to download....");
-    let task = match DownloadTask::new(url).await {
+    let download_task = match pool.get_task_by_url(&url).await {
         Ok(task) => task,
-        Err(e) => {
-            eprintln!("{}", e);
-            return Err(());
-        }
+        Err(_) => None,
     };
 
-    println!("File Name : {fn}\nFile Size : {fs} bytes\n", fn=task.meta.file_name, fs=task.meta.content_length);
+    let mut pbr = ProgressBar::new(100);
 
-    println!("Creating download session");
+    let downloader;
 
-    let temp_dir = format!(".{sep}temp", sep = MAIN_SEPARATOR);
+    let on_progress_changed = move |p: f64| {
+        pbr.set(p.round() as u64);
+    };
+    let on_complete = |s: String| {
+        println!("\nFile downloaded successfully : {}", s);
+    };
+    let on_error = |e: WhipError| {
+        eprintln!("\n{}", e);
+    };
 
-    let task_id = match pool
-        .insert_task(
-            &task,
-            temp_dir.clone(),
+    if let Some(d_task) = download_task {
+        println!("Continuing download : {}", d_task.file_name);
+
+        downloader = Downloader::restore(
+            d_task.percentage_completed,
+            d_task.to_download_task(),
             output_dir.to_string_lossy().to_string(),
-            max_threads.to_string(),
+            d_task.temp_files_path,
+            on_progress_changed,
+            on_complete,
+            on_error,
+            in_memory,
+            max_threads as u8,
         )
-        .await
-    {
-        Ok(id) => id,
-        Err(e) => {
+    } else {
+        println!("Profiling Download");
+        let download_task = match DownloadTask::new(url).await {
+            Ok(task) => task,
+            Err(e) => {
+                eprintln!("{}", e);
+                return Err(());
+            }
+        };
+
+        let temp_dir = format!(".{}temp", MAIN_SEPARATOR);
+
+        if let Err(e) = pool
+            .insert_task(
+                &download_task,
+                temp_dir.to_owned(),
+                output_dir.to_string_lossy().to_string(),
+                max_threads.to_string(),
+            )
+            .await
+        {
             eprintln!("{}", e);
             return Err(());
-        }
-    };
+        };
 
-    let downloader = match Downloader::new(
-        task,
-        output_dir.to_string_lossy().to_string(),
-        temp_dir,
-        |_| {},
-        |path| {
-            println!("File downloaded successfully\nOutput Dir : {}", path);
-        },
-        |e| {
-            println!("{}", e);
-        },
-        in_memory,
-    ) {
-        Ok(downloader) => downloader,
-        Err(e) => {
-            eprintln!("{}", e);
-            return Err(());
-        }
-    };
+        println!("Starting download : {}", download_task.meta.file_name);
 
-    println!(
-        "Download session created successfully\nInitializing download, do not close the terminal"
-    );
+        match Downloader::new(
+            download_task,
+            output_dir.to_string_lossy().to_string(),
+            temp_dir,
+            on_progress_changed,
+            on_complete,
+            on_error,
+            in_memory,
+        ) {
+            Ok(t) => {
+                downloader = t;
+            }
+            Err(e) => {
+                eprintln!("{}", e);
+                return Err(());
+            }
+        }
+    }
 
-    match downloader.download(max_threads).await {
-        Ok(_) => {
-            match pool.get_task(task_id as i64).await {
-                Ok(t) => {
-                    if let Some(mut download) = t {
-                        download.percentage_completed = 100f64;
-                        if let Err(e) = pool.update_task(download).await {
-                            eprintln!("{}", e);
-                            return Err(());
-                        };
-                    }
-                }
-                Err(e) => {
-                    eprintln!("{}", e);
-                    return Err(());
-                }
-            };
-        }
-        Err(e) => {
-            eprintln!("{}", e);
-            return Err(());
-        }
+    if let Err(e) = downloader.download(max_threads).await {
+        eprintln!("{}", e);
+        return Err(());
     };
 
     return Ok(());

@@ -2,7 +2,7 @@ use crate::storage::Storage;
 
 #[derive(Debug)]
 pub enum Event {
-    ProgressChanged(u64),
+    ProgressChanged(f64),
     Complete(CompleteStats),
 }
 
