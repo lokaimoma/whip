@@ -181,8 +181,7 @@ where
 
         if !sess.use_in_memory_storage {
             if let Some(value) = sess.setup_file_storage(&mut storage, download_part).await {
-                if download_part.start_byte >= download_part.end_byte && download_part.end_byte != 0
-                {
+                if value.is_ok() {
                     sess.on_event(Event::Complete(CompleteStats {
                         storage,
                         part_id: download_part.id,
@@ -275,10 +274,10 @@ where
                 self.on_event(Event::ProgressChanged(metadata.len() as f64))
                     .await
                     .unwrap();
-                download_part.start_byte = metadata.len();
                 if metadata.len() >= (download_part.end_byte - download_part.start_byte) {
                     return Some(Ok(()));
                 }
+                download_part.start_byte = metadata.len();
                 append = true;
             }
         }

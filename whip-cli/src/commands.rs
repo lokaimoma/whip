@@ -61,7 +61,7 @@ pub async fn handle_download(
     let downloader;
 
     let on_progress_changed = move |p: f64| {
-        pbr.set_position(p.round() as u64);
+        pbr.set_position(p.floor() as u64);
     };
     let on_complete = |s: String| {
         println!("\nFile downloaded successfully : {}", s);
@@ -71,7 +71,7 @@ pub async fn handle_download(
     };
 
     if let Some(d_task) = download_task {
-        println!("Continuing download : {}", d_task.file_name);
+        println!("Resuming download : {}", d_task.file_name);
 
         downloader = Downloader::restore(
             d_task.percentage_completed,
