@@ -61,7 +61,9 @@ pub async fn handle_download(
     let downloader;
 
     let on_progress_changed = move |p: f64| {
-        pbr.set_position(p.floor() as u64);
+        if !pbr.is_finished() {
+            pbr.set_position(p.floor() as u64);
+        }
     };
     let on_complete = |s: String| {
         println!("\nFile downloaded successfully : {}", s);
