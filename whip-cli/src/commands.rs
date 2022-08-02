@@ -1,7 +1,7 @@
 use std::path::{PathBuf, MAIN_SEPARATOR};
 
 use clap::Subcommand;
-use pbr::ProgressBar;
+use indicatif::ProgressBar;
 use sqlx::SqlitePool;
 use whip_core::{download::DownloadTask, downloader::Downloader, errors::WhipError};
 use whip_persistance::models::{DownloadFilter as Df, DownloadTaskRepository};
@@ -56,12 +56,12 @@ pub async fn handle_download(
         Err(_) => None,
     };
 
-    let mut pbr = ProgressBar::new(100);
+    let pbr = ProgressBar::new(100);
 
     let downloader;
 
     let on_progress_changed = move |p: f64| {
-        pbr.set(p.round() as u64);
+        pbr.set_position(p.round() as u64);
     };
     let on_complete = |s: String| {
         println!("\nFile downloaded successfully : {}", s);
@@ -82,8 +82,8 @@ pub async fn handle_download(
             on_complete,
             on_error,
             in_memory,
-            max_threads as u8,
-        )
+            d_task.max_threads as u8,
+        );
     } else {
         println!("Profiling Download");
         let download_task = match DownloadTask::new(url).await {
@@ -119,6 +119,7 @@ pub async fn handle_download(
             on_complete,
             on_error,
             in_memory,
+            max_threads as u8,
         ) {
             Ok(t) => {
                 downloader = t;
@@ -130,7 +131,7 @@ pub async fn handle_download(
         }
     }
 
-    if let Err(e) = downloader.download(max_threads).await {
+    if let Err(e) = downloader.download().await {
         eprintln!("{}", e);
         return Err(());
     };

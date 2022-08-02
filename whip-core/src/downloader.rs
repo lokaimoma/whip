@@ -26,9 +26,9 @@ pub enum SessionState {
 /// Represents a download session
 /// Download only starts when start function is called.
 #[derive(Debug)]
-pub struct Downloader<F>
+pub struct Downloader<P>
 where
-    F: std::marker::Send + std::marker::Sync + FnMut(f64) -> () + 'static,
+    P: std::marker::Send + std::marker::Sync + FnMut(f64) -> () + 'static,
 {
     /// Current download progress
     progress: f64,
@@ -41,7 +41,7 @@ where
     /// Information on the file to download
     pub task: DownloadTask,
     /// Callback for getting download progress updates
-    pub on_progress_change: F,
+    pub on_progress_change: P,
     /// Callback for getting final file path on completion
     pub on_complete: fn(String) -> (),
     pub on_error: fn(WhipError) -> (),
@@ -53,6 +53,8 @@ where
     completed_downloads: HashMap<u8, CompleteStats>,
     /// Max number of threads to use
     max_threads: u8,
+    /// Total number of download parts
+    total_download_parts: u8,
 }
 
 impl<F> Downloader<F>
@@ -68,6 +70,7 @@ where
         on_complete: fn(String) -> (),
         on_error: fn(WhipError) -> (),
         use_in_memory_storage: bool,
+        max_threads: u8,
     ) -> Result<Self, WhipError> {
         let output_path = PathBuf::from(output_dir);
         if !output_path.is_dir() {
@@ -91,9 +94,10 @@ where
             use_in_memory_storage,
             state: SessionState::Download,
             completed_downloads: HashMap::new(),
-            max_threads: 0,
+            max_threads: max_threads,
             on_complete,
             on_error,
+            total_download_parts: max_threads,
         })
     }
 
@@ -123,6 +127,7 @@ where
             use_in_memory_storage,
             completed_downloads: HashMap::new(),
             max_threads,
+            total_download_parts: max_threads,
         }
     }
 
@@ -134,9 +139,10 @@ where
         self.state = SessionState::Download;
     }
 
-    pub async fn download(mut self, thread_count: u64) -> Result<(), WhipError> {
+    pub async fn download(mut self) -> Result<(), WhipError> {
         let client = Arc::from(reqwest::Client::new());
-        let parts = self.task.get_download_parts(thread_count);
+        let parts = self.task.get_download_parts(self.max_threads as u64);
+        self.total_download_parts = parts.len() as u8;
         self.max_threads = parts.len() as u8;
         let session = Arc::from(Mutex::from(self));
         let mut join_handles = Vec::new();
@@ -177,10 +183,6 @@ where
             if let Some(value) = sess.setup_file_storage(&mut storage, download_part).await {
                 if download_part.start_byte >= download_part.end_byte && download_part.end_byte != 0
                 {
-                    sess.on_event(Event::ProgressChanged(
-                        (download_part.end_byte - download_part.start_byte) as f64,
-                    ))
-                    .await?;
                     sess.on_event(Event::Complete(CompleteStats {
                         storage,
                         part_id: download_part.id,
@@ -254,7 +256,7 @@ where
     }
 
     async fn setup_file_storage(
-        &self,
+        &mut self,
         storage: &mut Storage,
         download_part: &mut DownloadPart,
     ) -> Option<Result<(), WhipError>> {
@@ -270,10 +272,13 @@ where
 
         if self.task.meta.supports_resume && temp_file_path.exists() {
             if let Ok(metadata) = temp_file_path.metadata() {
+                self.on_event(Event::ProgressChanged(metadata.len() as f64))
+                    .await
+                    .unwrap();
+                download_part.start_byte = metadata.len();
                 if metadata.len() >= (download_part.end_byte - download_part.start_byte) {
                     return Some(Ok(()));
                 }
-                download_part.start_byte = metadata.len();
                 append = true;
             }
         }
@@ -310,7 +315,7 @@ where
             }
             Event::Complete(stats) => {
                 self.completed_downloads.insert(stats.part_id, stats);
-                if self.completed_downloads.len() >= self.max_threads.into() {
+                if self.completed_downloads.len() >= self.total_download_parts.into() {
                     let f_name = self.concatenate_files().await?;
                     (self.on_progress_change)(100f64);
                     (self.on_complete)(f_name.to_string_lossy().to_string());
