@@ -63,16 +63,16 @@ where
     total_download_parts: u8,
 }
 
-impl<F> Downloader<F>
+impl<P> Downloader<P>
 where
-    F: std::marker::Send + std::marker::Sync + FnMut(f64) -> () + 'static,
+    P: std::marker::Send + std::marker::Sync + FnMut(f64) -> () + 'static,
 {
     /// Creates a download
     pub fn new(
         task: DownloadTask,
         output_dir: String,
         temp_dir: String,
-        on_progress_change: F,
+        on_progress_change: P,
         on_complete: fn(String) -> (),
         on_error: fn(WhipError) -> (),
         use_in_memory_storage: bool,
@@ -114,12 +114,12 @@ where
         task: DownloadTask,
         output_dir: String,
         temp_dir: String,
-        on_progress_change: F,
+        on_progress_change: P,
         on_complete: fn(String) -> (),
         on_error: fn(WhipError) -> (),
         use_in_memory_storage: bool,
         max_threads: u8,
-    ) -> Downloader<F> {
+    ) -> Downloader<P> {
         Downloader {
             progress,
             state: SessionState::Download,
@@ -145,7 +145,9 @@ where
         self.state = SessionState::Download;
     }
 
-    pub async fn download(mut self) -> Result<(), WhipError> {
+    /// Logic for downloading the file. Returns the number of bytes downloaded
+    /// if download was succesful and an error if otherwise.
+    pub async fn download(mut self) -> Result<f64, WhipError> {
         let client = Arc::from(reqwest::Client::new());
         let parts = self.task.get_download_parts(self.max_threads as u64);
         self.total_download_parts = parts.len() as u8;
@@ -173,11 +175,12 @@ where
             }
         }
 
-        Ok(())
+        let progress = session.lock().await.progress;
+        Ok(progress)
     }
 
     async fn download_part(
-        session: &Arc<Mutex<Downloader<F>>>,
+        session: &Arc<Mutex<Downloader<P>>>,
         client: Arc<Client>,
         download_part: &mut DownloadPart,
     ) -> Result<(), WhipError> {
@@ -324,6 +327,7 @@ where
                 self.completed_downloads.insert(stats.part_id, stats);
                 if self.completed_downloads.len() >= self.total_download_parts.into() {
                     let f_name = self.concatenate_files().await?;
+                    self.progress = self.task.meta.content_length as f64;
                     (self.on_progress_change)(100f64);
                     (self.on_complete)(f_name.to_string_lossy().to_string());
                 }
