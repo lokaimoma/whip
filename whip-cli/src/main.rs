@@ -1,3 +1,5 @@
+#[macro_use]
+extern crate prettytable;
 use clap::Parser;
 use commands::{handle_download, handle_show_downloads, Commands};
 use dotenv::dotenv;

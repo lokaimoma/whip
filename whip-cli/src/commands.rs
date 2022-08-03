@@ -1,3 +1,4 @@
+use prettytable::Table;
 use std::path::{PathBuf, MAIN_SEPARATOR};
 
 use clap::Subcommand;
@@ -192,23 +193,32 @@ pub async fn handle_download(
 pub async fn handle_show_downloads(filter: DownloadFilter, pool: SqlitePool) -> Result<(), ()> {
     let df = filter.into();
 
-    match pool.get_tasks(df).await {
-        Ok(res) => {
-            if res.len() == 0 {
-                println!("No download task(s) added yet.");
-            } else {
-                for (index, task) in res.iter().enumerate() {
-                    println!(
-                        "#{} {} - {}%",
-                        index, task.file_name, task.percentage_completed
-                    );
-                }
-            }
-        }
+    let downloads = match pool.get_tasks(df).await {
+        Ok(res) => res,
         Err(e) => {
             eprintln!("{}", e);
             return Err(());
         }
     };
+
+    if downloads.is_empty() {
+        println!("You have no downloads");
+        return Ok(());
+    }
+
+    let mut table = Table::new();
+
+    table.add_row(row![bFg->"id", bFg->"File Name", bFg->"Percentage Completed"]);
+
+    for (_, download) in downloads.iter().enumerate() {
+        table.add_row(row![
+            download.id,
+            download.file_name,
+            download.percentage_completed
+        ]);
+    }
+
+    table.printstd();
+
     return Ok(());
 }
