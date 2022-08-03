@@ -1,4 +1,10 @@
-use std::{collections::HashMap, io::SeekFrom, path::PathBuf, sync::Arc};
+use std::{
+    collections::HashMap,
+    fs::remove_file,
+    io::SeekFrom,
+    path::{PathBuf, MAIN_SEPARATOR},
+    sync::Arc,
+};
 
 use futures::{join, AsyncReadExt, AsyncWriteExt, StreamExt};
 use tokio::{
@@ -46,7 +52,7 @@ where
     pub on_complete: fn(String) -> (),
     pub on_error: fn(WhipError) -> (),
     /// Status of the current download session
-    pub completed: bool,
+    completed: bool,
     /// Use in memory storage to store each part (Takes precedence over temp_dir)
     pub use_in_memory_storage: bool,
     /// Parts that have completed successfully
@@ -123,7 +129,7 @@ where
             on_progress_change,
             on_complete,
             on_error,
-            completed: progress >= 100f64,
+            completed: false,
             use_in_memory_storage,
             completed_downloads: HashMap::new(),
             max_threads,
@@ -145,6 +151,7 @@ where
         self.total_download_parts = parts.len() as u8;
         self.max_threads = parts.len() as u8;
         let session = Arc::from(Mutex::from(self));
+
         let mut join_handles = Vec::new();
         for mut p in parts.into_iter() {
             let s = session.clone();
@@ -158,6 +165,7 @@ where
             });
             join_handles.push(h);
         }
+
         for j in join_handles {
             let res = join!(j);
             if let Err(e) = res.0 {
@@ -363,5 +371,21 @@ where
         Err(WhipError::Storage(
             "Error creating download file".to_string(),
         ))
+    }
+}
+
+impl<F> Drop for Downloader<F>
+where
+    F: std::marker::Send + std::marker::Sync + FnMut(f64) -> () + 'static,
+{
+    fn drop(&mut self) {
+        if self.completed {
+            for i in 0..self.total_download_parts {
+                let f_path = format!("{temp_dir}{sep}{fn}.{id}", temp_dir=self.temp_dir.to_string_lossy().to_string(),fn=self.task.meta.file_name, id=i, sep=MAIN_SEPARATOR);
+                if let Err(e) = remove_file(&f_path) {
+                    eprintln!("{} : {}", e.to_string(), f_path);
+                };
+            }
+        }
     }
 }
