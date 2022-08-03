@@ -119,6 +119,7 @@ pub async fn handle_download(
             d_task.max_threads as u8,
         );
         dtask_entity = d_task;
+        dtask_entity.final_file_path = output_dir.to_string_lossy().to_string();
     } else {
         println!("Profiling Download");
         let download_task = match DownloadTask::new(url).await {
