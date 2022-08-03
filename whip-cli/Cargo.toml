@@ -14,3 +14,4 @@ whip-core = {path="../whip-core"}
 whip-persistance = {path="../whip-persistance"}
 dotenv = "0.15.0"
 indicatif = "0.17.0"
+prettytable-rs = "0.8.0"
