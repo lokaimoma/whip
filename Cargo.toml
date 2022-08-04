@@ -4,3 +4,6 @@ members = [
     "whip-persistance",
     "whip-cli"
 ]
+
+[profile.release]
+opt-level = 3

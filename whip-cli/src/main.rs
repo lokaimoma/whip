@@ -1,10 +1,15 @@
 #[macro_use]
 extern crate prettytable;
 use clap::Parser;
-use commands::{handle_download, handle_show_downloads, Commands};
+use commands::{handle_download, handle_show_downloads, Commands, TEMP_DIR};
 use dotenv::dotenv;
-use std::process;
-use whip_persistance::get_database_pool;
+use sqlx::SqlitePool;
+use std::{
+    path::{Path, PathBuf},
+    process,
+};
+use tokio::fs;
+use whip_persistance::{errors::DatabaseError, get_database_pool};
 
 pub mod commands;
 
@@ -19,9 +24,17 @@ struct Whip {
 async fn main() {
     dotenv().ok();
 
+    if Path::new(TEMP_DIR).is_dir() {
+        if let Err(e) = fs::create_dir(TEMP_DIR).await {
+            eprintln!("{}", e);
+            process::exit(1);
+        }
+    }
+
     let database_url =
         dotenv::var("DATABASE_URL").expect("DATABASE_URL environment variable has to be set");
-    let db_pool = match get_database_pool(database_url).await {
+
+    let db_pool = match setup_database(database_url).await {
         Ok(pool) => pool,
         Err(e) => {
             eprintln!("{}", e);
@@ -51,4 +64,19 @@ async fn main() {
     if !successful {
         process::exit(1);
     }
+}
+
+async fn setup_database(database_url: String) -> Result<SqlitePool, DatabaseError> {
+    let db_file_path = database_url.replace("sqlite:", "");
+
+    let db_path = PathBuf::from(db_file_path);
+
+    if !db_path.is_file() {
+        if let Err(e) = fs::File::create(db_path).await {
+            return Err(DatabaseError::Operation(e.to_string()));
+        };
+    }
+
+    let db_pool = get_database_pool(database_url).await?;
+    Ok(db_pool)
 }

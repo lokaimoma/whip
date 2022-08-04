@@ -1,11 +1,17 @@
 use prettytable::Table;
-use std::path::{PathBuf, MAIN_SEPARATOR};
+use std::path::PathBuf;
 
 use clap::Subcommand;
 use indicatif::{ProgressBar, ProgressStyle};
 use sqlx::SqlitePool;
 use whip_core::{download::DownloadTask, downloader::Downloader, errors::WhipError};
 use whip_persistance::models::{DownloadFilter as Df, DownloadTaskEntity, DownloadTaskRepository};
+
+#[cfg(target_family = "windows")]
+pub const TEMP_DIR: &str = ".\\temp";
+
+#[cfg(target_family = "unix")]
+pub const TEMP_DIR: &str = "./temp";
 
 #[derive(clap::ValueEnum, Clone)]
 pub enum DownloadFilter {
@@ -131,12 +137,10 @@ pub async fn handle_download(
             }
         };
 
-        let temp_dir = format!(".{}temp", MAIN_SEPARATOR);
-
         match pool
             .insert_task(
                 &download_task,
-                temp_dir.to_owned(),
+                TEMP_DIR.to_owned(),
                 output_dir.to_string_lossy().to_string(),
                 max_threads.to_string(),
             )
@@ -156,7 +160,7 @@ pub async fn handle_download(
         match Downloader::new(
             download_task,
             output_dir.to_string_lossy().to_string(),
-            temp_dir,
+            TEMP_DIR.to_string(),
             on_progress_changed,
             on_complete,
             on_error,
