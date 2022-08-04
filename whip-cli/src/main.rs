@@ -24,7 +24,7 @@ struct Whip {
 async fn main() {
     dotenv().ok();
 
-    if Path::new(TEMP_DIR).is_dir() {
+    if !Path::new(TEMP_DIR).is_dir() {
         if let Err(e) = fs::create_dir(TEMP_DIR).await {
             eprintln!("{}", e);
             process::exit(1);
