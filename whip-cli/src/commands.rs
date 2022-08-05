@@ -137,7 +137,6 @@ pub async fn handle_download(
     };
 
     if let Some(d_task) = download_task {
-        println!("Percentage completed {}", d_task.percentage_completed);
         if d_task.percentage_completed >= 100f64 {
             let mut path = PathBuf::new();
             path.push(&d_task.final_file_path);
@@ -260,13 +259,17 @@ pub async fn handle_show_downloads(filter: DownloadFilter, pool: SqlitePool) -> 
 
     let mut table = Table::new();
 
-    table.add_row(row![bFg->"id", bFg->"File Name", bFg->"Percentage Completed"]);
+    table.add_row(row![bFg->"id", bFg->"File Name", bFg->"Status"]);
 
     for (_, download) in downloads.iter().enumerate() {
         table.add_row(row![
             download.id,
             download.file_name,
-            download.percentage_completed
+            if download.percentage_completed >= 100f64 {
+                "Completed"
+            } else {
+                "In Progress"
+            }
         ]);
     }
 
