@@ -140,4 +140,15 @@ impl DownloadTaskRepository for SqlitePool {
             "Error updating download task".to_string(),
         ))
     }
+
+    async fn remove_task(&self, id: i64) -> Result<(), DatabaseError> {
+        if let Err(e) = sqlx::query!("DELETE FROM Download_Task WHERE id = ?1", id)
+            .execute(self)
+            .await
+        {
+            return Err(DatabaseError::Operation(e.to_string()));
+        };
+
+        Ok(())
+    }
 }

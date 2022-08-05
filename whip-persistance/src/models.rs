@@ -64,4 +64,5 @@ pub trait DownloadTaskRepository {
         &self,
         task: DownloadTaskEntity,
     ) -> Result<DownloadTaskEntity, DatabaseError>;
+    async fn remove_task(&self, id: i64) -> Result<(), DatabaseError>;
 }

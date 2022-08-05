@@ -49,6 +49,30 @@ pub enum Commands {
         #[clap(takes_value = false, required = false)]
         in_memory: bool,
     },
+    /// Delete a download task
+    Delete {
+        #[clap(value_parser)]
+        id: i64,
+        #[clap(required = false, takes_value = false)]
+        remove_file: bool,
+    },
+}
+
+pub async fn handle_delete(id: i64, remove_file: bool, db_pool: SqlitePool) -> Result<(), ()> {
+    let task = match db_pool.get_task_by_id(id).await {
+        Ok(task) => task,
+        Err(e) => {
+            eprintln!("{}", e);
+            return Err(());
+        }
+    };
+
+    if let Some(t) = task {
+    } else {
+        println!("No task found");
+    };
+
+    Ok(())
 }
 
 pub async fn handle_download(
