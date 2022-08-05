@@ -1,5 +1,6 @@
 use prettytable::Table;
-use std::path::PathBuf;
+use std::path::{PathBuf, MAIN_SEPARATOR};
+use tokio::fs;
 
 use clap::Subcommand;
 use indicatif::{ProgressBar, ProgressStyle};
@@ -68,6 +69,29 @@ pub async fn handle_delete(id: i64, remove_file: bool, db_pool: SqlitePool) -> R
     };
 
     if let Some(t) = task {
+        if let Err(e) = db_pool.remove_task(id).await {
+            eprintln!("{}", e);
+            return Err(());
+        }
+        if remove_file {
+            for i in 0..t.max_threads {
+                let f_name = format!("{tmp}{sep}{fn}.{id}", tmp = TEMP_DIR, sep = MAIN_SEPARATOR, fn=t.file_name.to_owned(), id=i);
+                if PathBuf::from(&f_name).is_file() {
+                    if let Err(e) = fs::remove_file(&f_name).await {
+                        eprintln!("{} : Path {}", e, f_name);
+                    }
+                } else {
+                    break;
+                }
+            }
+
+            let final_file = PathBuf::from(format!("{}{}", t.final_file_path, t.file_name));
+            if final_file.is_file() {
+                if let Err(e) = fs::remove_file(&final_file).await {
+                    eprintln!("{} : Path {}", e, final_file.to_string_lossy().to_string());
+                }
+            }
+        }
     } else {
         println!("No task found");
     };

@@ -1,7 +1,7 @@
 #[macro_use]
 extern crate prettytable;
 use clap::Parser;
-use commands::{handle_download, handle_show_downloads, Commands, TEMP_DIR};
+use commands::{handle_delete, handle_download, handle_show_downloads, Commands, TEMP_DIR};
 use dotenv::dotenv;
 use sqlx::SqlitePool;
 use std::{
@@ -58,6 +58,9 @@ async fn main() {
             successful = handle_download(url, output_dir, max_threads, in_memory, db_pool)
                 .await
                 .is_ok();
+        }
+        Commands::Delete { id, remove_file } => {
+            successful = handle_delete(id, remove_file, db_pool).await.is_ok();
         }
     }
 
