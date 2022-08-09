@@ -151,7 +151,7 @@ where
         let client = Arc::from(reqwest::Client::new());
         let parts = self.task.get_download_parts(self.max_threads as u64);
         self.total_download_parts = parts.len() as u8;
-        self.max_threads = parts.len() as u8;
+        self.total_download_parts = parts.len() as u8;
         let session = Arc::from(Mutex::from(self));
 
         let mut join_handles = Vec::new();

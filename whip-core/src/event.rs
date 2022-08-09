@@ -9,5 +9,5 @@ pub enum Event {
 #[derive(Debug)]
 pub struct CompleteStats {
     pub storage: Storage,
-    pub part_id: u8,
+    pub part_id: u8,   
 }
