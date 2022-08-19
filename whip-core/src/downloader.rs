@@ -14,7 +14,7 @@ use tokio::{
     task,
 };
 
-use reqwest::{header, Client};
+use reqwest::{header, Client, Response, StatusCode};
 
 use crate::{
     download::{DownloadPart, DownloadTask},
@@ -61,6 +61,8 @@ where
     max_threads: u8,
     /// Total number of download parts
     total_download_parts: u8,
+    /// Maximum retry request for a file part
+    max_retries: u8,
 }
 
 impl<P> Downloader<P>
@@ -77,6 +79,7 @@ where
         on_error: fn(WhipError) -> (),
         use_in_memory_storage: bool,
         max_threads: u8,
+        max_retries: u8,
     ) -> Result<Self, WhipError> {
         let output_path = PathBuf::from(output_dir);
         if !output_path.is_dir() {
@@ -104,6 +107,7 @@ where
             on_complete,
             on_error,
             total_download_parts: max_threads,
+            max_retries,
         })
     }
 
@@ -119,6 +123,7 @@ where
         on_error: fn(WhipError) -> (),
         use_in_memory_storage: bool,
         max_threads: u8,
+        max_retries: u8,
     ) -> Downloader<P> {
         Downloader {
             progress,
@@ -134,6 +139,7 @@ where
             completed_downloads: HashMap::new(),
             max_threads,
             total_download_parts: max_threads,
+            max_retries,
         }
     }
 
@@ -206,23 +212,31 @@ where
         let task = sess.task.clone();
         drop(sess);
 
-        let mut req = client.get(&task.file_url);
+        let mut response: Response;
+        let mut retries = 0;
 
-        if task.meta.supports_resume {
-            req = req.header(
-                header::RANGE,
-                format!(
-                    "bytes={start}-{end}",
-                    start = download_part.start_byte,
-                    end = download_part.end_byte
-                ),
-            )
+        loop {
+            response = match reqwest_file(&client, &task, download_part).await {
+                Ok(r) => r,
+                Err(value) => return value,
+            };
+
+            if ![StatusCode::OK, StatusCode::PARTIAL_CONTENT].contains(&response.status()) {
+                if response.status() == StatusCode::TOO_MANY_REQUESTS {
+                } else {
+                    return Err(WhipError::NetWork(
+                        response
+                            .status()
+                            .canonical_reason()
+                            .unwrap_or("Error fetching file from server")
+                            .to_string(),
+                    ));
+                }
+            } else {
+                break;
+            }
+            retries += 1;
         }
-
-        let response = match req.send().await {
-            Ok(r) => r,
-            Err(e) => return Err(WhipError::NetWork(e.to_string())),
-        };
 
         let mut bytes_stream = response.bytes_stream();
 
@@ -376,6 +390,29 @@ where
             "Error creating download file".to_string(),
         ))
     }
+}
+
+async fn reqwest_file(
+    client: &Arc<Client>,
+    task: &DownloadTask,
+    download_part: &mut DownloadPart,
+) -> Result<reqwest::Response, Result<(), WhipError>> {
+    let mut req = client.get(&task.file_url);
+    if task.meta.supports_resume {
+        req = req.header(
+            header::RANGE,
+            format!(
+                "bytes={start}-{end}",
+                start = download_part.start_byte,
+                end = download_part.end_byte
+            ),
+        )
+    }
+    let response = match req.send().await {
+        Ok(r) => r,
+        Err(e) => return Err(Err(WhipError::NetWork(e.to_string()))),
+    };
+    Ok(response)
 }
 
 impl<F> Drop for Downloader<F>
