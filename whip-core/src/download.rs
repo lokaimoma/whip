@@ -79,10 +79,12 @@ impl DownloadTask {
             if let Some(content_disposition) = response.headers().get(header::CONTENT_DISPOSITION) {
                 if !content_disposition.is_empty() {
                     let cd = String::from(content_disposition.to_str().unwrap_or("").trim());
-                    if cd.to_lowercase().contains("filename") {
-                        if let Some(index) = cd.rfind('=') {
-                            if index != cd.len() - 1 {
-                                meta.file_name = cd[index + 1..].to_string();
+                    if cd.to_lowercase().contains("filename=") {
+                        let cd_parts = cd.split(';');
+                        for p in cd_parts {
+                            if let Some(index) = p.find("filename=") {
+                                meta.file_name = p[index + "filename=".len()..].to_string();
+                                break;
                             }
                         }
                     }
