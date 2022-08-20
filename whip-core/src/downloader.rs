@@ -4,6 +4,7 @@ use std::{
     io::SeekFrom,
     path::{PathBuf, MAIN_SEPARATOR},
     sync::Arc,
+    time::Duration,
 };
 
 use futures::{join, AsyncReadExt, AsyncWriteExt, StreamExt};
@@ -63,6 +64,7 @@ where
     total_download_parts: u8,
     /// Maximum retry request for a file part
     max_retries: u8,
+    retry_download: bool,
 }
 
 impl<P> Downloader<P>
@@ -108,6 +110,7 @@ where
             on_error,
             total_download_parts: max_threads,
             max_retries,
+            retry_download: false,
         })
     }
 
@@ -140,6 +143,7 @@ where
             max_threads,
             total_download_parts: max_threads,
             max_retries,
+            retry_download: false,
         }
     }
 
@@ -167,6 +171,7 @@ where
             let h = task::spawn(async move {
                 if let Err(e) = Downloader::download_part(&s, c, &mut p).await {
                     let mut ses = s.lock().await;
+                    ses.retry_download = true;
                     (ses.on_error)(e);
                     ses.completed = false;
                 };
@@ -210,19 +215,33 @@ where
         }
 
         let task = sess.task.clone();
+        let max_retries = sess.max_retries;
         drop(sess);
 
         let mut response: Response;
         let mut retries = 0;
+        let mut interval = tokio::time::interval(Duration::from_secs(30));
+        interval.tick().await;
 
         loop {
-            response = match reqwest_file(&client, &task, download_part).await {
+            if retries > max_retries {
+                return Err(WhipError::NetWork("Max retries reached".to_string()));
+            }
+
+            response = match request_file(&client, &task, download_part).await {
                 Ok(r) => r,
                 Err(value) => return value,
             };
 
             if ![StatusCode::OK, StatusCode::PARTIAL_CONTENT].contains(&response.status()) {
                 if response.status() == StatusCode::TOO_MANY_REQUESTS {
+                    loop {
+                        interval.tick().await;
+                        let sess = session.lock().await;
+                        if sess.retry_download {
+                            break;
+                        }
+                    }
                 } else {
                     return Err(WhipError::NetWork(
                         response
@@ -338,6 +357,7 @@ where
                 );
             }
             Event::Complete(stats) => {
+                self.retry_download = true;
                 self.completed_downloads.insert(stats.part_id, stats);
                 if self.completed_downloads.len() >= self.total_download_parts.into() {
                     let f_name = self.concatenate_files().await?;
@@ -392,7 +412,7 @@ where
     }
 }
 
-async fn reqwest_file(
+async fn request_file(
     client: &Arc<Client>,
     task: &DownloadTask,
     download_part: &mut DownloadPart,
