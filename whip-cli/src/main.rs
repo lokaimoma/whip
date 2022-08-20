@@ -54,10 +54,18 @@ async fn main() {
             output_dir,
             max_threads,
             in_memory,
+            max_retries,
         } => {
-            successful = handle_download(url, output_dir, max_threads, in_memory, db_pool)
-                .await
-                .is_ok();
+            successful = handle_download(
+                url,
+                output_dir,
+                max_threads,
+                in_memory,
+                db_pool,
+                max_retries,
+            )
+            .await
+            .is_ok();
         }
         Commands::Delete { id, remove_file } => {
             successful = handle_delete(id, remove_file, db_pool).await.is_ok();

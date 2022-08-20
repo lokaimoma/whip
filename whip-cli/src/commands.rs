@@ -49,6 +49,8 @@ pub enum Commands {
         /// Option to store temp files in memory or on disk
         #[clap(takes_value = false, required = false)]
         in_memory: bool,
+        #[clap(value_parser, default_value = "3", long)]
+        max_retries: u8,
     },
     /// Delete a download task
     Delete {
@@ -105,6 +107,7 @@ pub async fn handle_download(
     max_threads: u64,
     in_memory: bool,
     pool: SqlitePool,
+    max_retires: u8,
 ) -> Result<(), ()> {
     let download_task = match pool.get_task_by_url(&url).await {
         Ok(task) => task,
@@ -171,6 +174,7 @@ pub async fn handle_download(
             on_error,
             in_memory,
             d_task.max_threads as u8,
+            max_retires,
         );
         dtask_entity = d_task;
         dtask_entity.final_file_path = output_dir.to_string_lossy().to_string();
@@ -213,6 +217,7 @@ pub async fn handle_download(
             on_error,
             in_memory,
             max_threads as u8,
+            max_retires,
         ) {
             Ok(t) => {
                 downloader = t;
