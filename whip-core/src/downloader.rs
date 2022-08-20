@@ -220,7 +220,7 @@ where
 
         let mut response: Response;
         let mut retries = 0;
-        let mut interval = tokio::time::interval(Duration::from_secs(30));
+        let mut interval = tokio::time::interval(Duration::from_secs(10));
         interval.tick().await;
 
         loop {
