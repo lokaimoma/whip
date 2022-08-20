@@ -252,6 +252,13 @@ where
                     ));
                 }
             } else {
+                if let Some(content_type) = response.headers().get(header::CONTENT_TYPE) {
+                    if content_type.to_str().unwrap_or("").contains(&"text/html") {
+                        return Err(WhipError::NetWork(
+                            "Download link expired or link doesn't point to a file".to_string(),
+                        ));
+                    }
+                };
                 break;
             }
             retries += 1;
