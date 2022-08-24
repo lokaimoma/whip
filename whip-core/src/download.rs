@@ -41,7 +41,7 @@ impl DownloadTask {
     /// Gets some basic informations on the file to download.
     /// File size, file name, content type and check if we
     /// can make partial downloads.
-    async fn get_file_info(url: &String) -> Result<DownloadMeta, ()> {
+    async fn get_file_info(url: &str) -> Result<DownloadMeta, ()> {
         let client = reqwest::Client::new();
         if let Ok(response) = client.head(url).send().await {
             let mut meta = DownloadMeta {
